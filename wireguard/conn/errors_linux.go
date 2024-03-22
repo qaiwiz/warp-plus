@@ -1,7 +1,5 @@
-/* SPDX-License-Identifier: MIT
- *
- * Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
- */
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
 
 package conn
 
@@ -9,18 +7,25 @@ import (
 	"errors"
 	"os"
 
-	"golang.org/x/sys/unix"
+	"golang.org/x/sys/unix" // For using unix syscall constants
 )
 
+// Function: errShouldDisableUDPGSO(err error) bool
+// Purpose: Check if the given error indicates that UDP GSO should be disabled.
+//
+// This function takes an error as an input and returns a boolean value indicating
+// whether the error suggests that UDP GSO should be disabled.
 func errShouldDisableUDPGSO(err error) bool {
+	// Declare a new variable 'serr' of type '*os.SyscallError' and assign the
+	// result of 'errors.As(err, &serr)'. This checks if the error 'err' can be
+	// type-asserted as '*os.SyscallError' and stores the result in 'serr'.
 	var serr *os.SyscallError
 	if errors.As(err, &serr) {
-		// EIO is returned by udp_send_skb() if the device driver does not have
-		// tx checksumming enabled, which is a hard requirement of UDP_SEGMENT.
-		// See:
-		// https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git/tree/man7/udp.7?id=806eabd74910447f21005160e90957bde4db0183#n228
-		// https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/ipv4/udp.c?h=v6.2&id=c9c3395d5e3dcc6daee66c6908354d47bf98cb0c#n942
+		// If 'errors.As(err, &serr)' returns true, it means that 'err' is of type
+		// '*os.SyscallError'. Now, we check if the error code is 'unix.EIO'.
 		return serr.Err == unix.EIO
 	}
+	// If 'errors.As(err, &serr)' returns false or 'serr.Err' is not equal to
+	// 'unix.EIO', we return false, indicating that UDP GSO should not be disabled.
 	return false
 }
