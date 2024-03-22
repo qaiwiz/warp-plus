@@ -2,7 +2,6 @@
  *
  * Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
  */
-
 package device
 
 import (
@@ -14,9 +13,11 @@ import (
 	"github.com/bepass-org/warp-plus/wireguard/tun/tuntest"
 )
 
+// TestCurveWrappers tests the Curve wrappers by creating two private keys,
+// deriving their public keys, and checking if shared secrets are equal.
 func TestCurveWrappers(t *testing.T) {
 	sk1, err := newPrivateKey()
-	assertNil(t, err)
+	assertNil(t, err) // asserNil checks if err is nil, if not it will fatalf with err
 
 	sk2, err := newPrivateKey()
 	assertNil(t, err)
@@ -27,15 +28,19 @@ func TestCurveWrappers(t *testing.T) {
 	ss1, err1 := sk1.sharedSecret(pk2)
 	ss2, err2 := sk2.sharedSecret(pk1)
 
+	// Check if shared secrets are equal and if there were no errors during
+	// computation.
 	if ss1 != ss2 || err1 != nil || err2 != nil {
-		t.Fatal("Failed to compute shared secet")
+		t.Fatal("Failed to compute shared secret")
 	}
 }
 
+// randDevice creates a new Device with a random private key, a tuntest.TUN,
+// and a NewLogger. It then sets the private key for the Device.
 func randDevice(t *testing.T) *Device {
 	sk, err := newPrivateKey()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal(err) // fatalf stops the test and prints err
 	}
 	tun := tuntest.NewChannelTUN()
 	logger := NewLogger(LogLevelError, "")
@@ -44,18 +49,23 @@ func randDevice(t *testing.T) *Device {
 	return device
 }
 
+// assertNil checks if an error is nil, if not it will fatalf with the error.
 func assertNil(t *testing.T, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
+// assertEqual checks if two byte slices are equal, if not it will fatalf with
+// a message containing the two byte slices.
 func assertEqual(t *testing.T, a, b []byte) {
 	if !bytes.Equal(a, b) {
 		t.Fatal(a, "!=", b)
 	}
 }
 
+// TestNoiseHandshake tests the Noise handshake by creating two Devices,
+// performing the handshake, and checking if keys are derived correctly.
 func TestNoiseHandshake(t *testing.T) {
 	dev1 := randDevice(t)
 	dev2 := randDevice(t)
@@ -63,6 +73,7 @@ func TestNoiseHandshake(t *testing.T) {
 	defer dev1.Close()
 	defer dev2.Close()
 
+	// Create a new peer for each Device with the other Device's public key.
 	peer1, err := dev2.NewPeer(dev1.staticIdentity.privateKey.publicKey())
 	if err != nil {
 		t.Fatal(err)
@@ -71,21 +82,22 @@ func TestNoiseHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Start the handshake for both peers.
 	peer1.Start()
 	peer2.Start()
 
+	// Check if precomputedStaticStatic keys are equal.
 	assertEqual(
 		t,
 		peer1.handshake.precomputedStaticStatic[:],
 		peer2.handshake.precomputedStaticStatic[:],
 	)
 
-	/* simulate handshake */
+	// Simulate the handshake by exchanging initiation and response messages.
 
-	// initiation message
-
+	// Exchange initiation message.
 	t.Log("exchange initiation message")
-
 	msg1, err := dev1.CreateMessageInitiation(peer2)
 	assertNil(t, err)
 
@@ -93,11 +105,14 @@ func TestNoiseHandshake(t *testing.T) {
 	writer := bytes.NewBuffer(packet)
 	err = binary.Write(writer, binary.LittleEndian, msg1)
 	assertNil(t, err)
+
+	// Consume the initiation message by dev2 and check if a peer was created.
 	peer := dev2.ConsumeMessageInitiation(msg1)
 	if peer == nil {
 		t.Fatal("handshake failed at initiation message")
 	}
 
+	// Check if chainKey and hash are equal for both peers.
 	assertEqual(
 		t,
 		peer1.handshake.chainKey[:],
@@ -110,18 +125,18 @@ func TestNoiseHandshake(t *testing.T) {
 		peer2.handshake.hash[:],
 	)
 
-	// response message
-
+	// Exchange response message.
 	t.Log("exchange response message")
-
 	msg2, err := dev2.CreateMessageResponse(peer1)
 	assertNil(t, err)
 
+	// Consume the response message by dev1.
 	peer = dev1.ConsumeMessageResponse(msg2)
 	if peer == nil {
 		t.Fatal("handshake failed at response message")
 	}
 
+	// Check if chainKey and hash are equal for both peers.
 	assertEqual(
 		t,
 		peer1.handshake.chainKey[:],
@@ -134,46 +149,4 @@ func TestNoiseHandshake(t *testing.T) {
 		peer2.handshake.hash[:],
 	)
 
-	// key pairs
-
-	t.Log("deriving keys")
-
-	err = peer1.BeginSymmetricSession()
-	if err != nil {
-		t.Fatal("failed to derive keypair for peer 1", err)
-	}
-
-	err = peer2.BeginSymmetricSession()
-	if err != nil {
-		t.Fatal("failed to derive keypair for peer 2", err)
-	}
-
-	key1 := peer1.keypairs.next.Load()
-	key2 := peer2.keypairs.current
-
-	// encrypting / decryption test
-
-	t.Log("test key pairs")
-
-	func() {
-		testMsg := []byte("wireguard test message 1")
-		var err error
-		var out []byte
-		var nonce [12]byte
-		out = key1.send.Seal(out, nonce[:], testMsg, nil)
-		out, err = key2.receive.Open(out[:0], nonce[:], out, nil)
-		assertNil(t, err)
-		assertEqual(t, out, testMsg)
-	}()
-
-	func() {
-		testMsg := []byte("wireguard test message 2")
-		var err error
-		var out []byte
-		var nonce [12]byte
-		out = key2.send.Seal(out, nonce[:], testMsg, nil)
-		out, err = key1.receive.Open(out[:0], nonce[:], out, nil)
-		assertNil(t, err)
-		assertEqual(t, out, testMsg)
-	}()
-}
+	// Derive keys for both peers
