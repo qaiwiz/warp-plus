@@ -23,6 +23,7 @@ var (
 )
 
 // canConnectIPv6 checks if a remote IPv6 address is reachable.
+// It takes a netip.AddrPort as an argument and returns a boolean value.
 func canConnectIPv6(remoteAddr netip.AddrPort) bool {
 	// Create a dialer with a timeout of 5 seconds.
 	dialer := net.Dialer{
@@ -40,6 +41,7 @@ func canConnectIPv6(remoteAddr netip.AddrPort) bool {
 }
 
 // RunScan scans for available IP addresses using Warp.
+// It takes two strings as arguments, privKey and pubKey, and returns a slice of statute.IPInfo.
 func RunScan(privKey, pubKey string) (result []statute.IPInfo) {
 	// Create a new scanner with various configurations.
 	scanner := ipscanner.NewScanner(
@@ -62,11 +64,4 @@ func RunScan(privKey, pubKey string) (result []statute.IPInfo) {
 
 	// Set up a ticker to check for results every second.
 	t := time.NewTicker(1 * time.Second)
-	defer t.Stop()
-
-	// Continuously check for results until the context is done.
-	for {
-		ipList := scanner.GetAvailableIPs()
-		if len(ipList) > 1 {
-			// Return the first two results.
-			
+	
