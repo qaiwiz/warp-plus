@@ -12,7 +12,8 @@ type IPInfQueue struct {
 }
 
 // Enqueue adds an item to the IPInfQueue and sorts the queue based on
-// the RTT field of each IPInfo struct.
+// the RTT field of each IPInfo struct. This allows for efficient retrieval
+// of the IPInfo struct with the lowest RTT value.
 func (q *IPInfQueue) Enqueue(item IPInfo) {
 	// Add the item to the end of the queue.
 	q.items = append(q.items, item)
@@ -25,27 +26,9 @@ func (q *IPInfQueue) Enqueue(item IPInfo) {
 
 // Dequeue removes and returns the IPInfo struct with the lowest RTT value
 // from the IPInfQueue. If the queue is empty, an empty IPInfo struct is returned.
+// This operation has a time complexity of O(1) as the first item in the sorted
+// slice is always the one with the lowest RTT value.
 func (q *IPInfQueue) Dequeue() IPInfo {
 	// Check if the queue is empty.
 	if len(q.items) == 0 {
-		// Return an empty IPInfo struct.
-		return IPInfo{}
-	}
-
-	// Remove and store the item with the lowest RTT.
-	item := q.items[0]
-	q.items = q.items[1:]
-
-	// Set the CreatedAt field of the item to the current time.
-	item.CreatedAt = time.Now()
-
-	// Return the item.
-	return item
-}
-
-// Size returns the number of items currently in the IPInfQueue.
-func (q *IPInfQueue) Size() int {
-	// Return the length of the items slice.
-	return len(q.items)
-}
-
+	
