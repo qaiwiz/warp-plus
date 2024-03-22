@@ -2,7 +2,6 @@
  *
  * Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
  */
-
 package device
 
 import (
@@ -11,68 +10,14 @@ import (
 	"errors"
 )
 
-const (
-	NoisePublicKeySize    = 32
-	NoisePrivateKeySize   = 32
-	NoisePresharedKeySize = 32
-)
+// NoisePublicKeySize is the size of a NoisePublicKey, which is 32 bytes.
+const NoisePublicKeySize = 32
 
-type (
-	NoisePublicKey    [NoisePublicKeySize]byte
-	NoisePrivateKey   [NoisePrivateKeySize]byte
-	NoisePresharedKey [NoisePresharedKeySize]byte
-	NoiseNonce        uint64 // padded to 12-bytes
-)
+// NoisePrivateKeySize is the size of a NoisePrivateKey, which is 32 bytes.
+const NoisePrivateKeySize = 32
 
-func loadExactHex(dst []byte, src string) error {
-	slice, err := hex.DecodeString(src)
-	if err != nil {
-		return err
-	}
-	if len(slice) != len(dst) {
-		return errors.New("hex string does not fit the slice")
-	}
-	copy(dst, slice)
-	return nil
-}
+// NoisePresharedKeySize is the size of a NoisePresharedKey, which is 32 bytes.
+const NoisePresharedKeySize = 32
 
-func (key NoisePrivateKey) IsZero() bool {
-	var zero NoisePrivateKey
-	return key.Equals(zero)
-}
-
-func (key NoisePrivateKey) Equals(tar NoisePrivateKey) bool {
-	return subtle.ConstantTimeCompare(key[:], tar[:]) == 1
-}
-
-func (key *NoisePrivateKey) FromHex(src string) (err error) {
-	err = loadExactHex(key[:], src)
-	key.clamp()
-	return
-}
-
-func (key *NoisePrivateKey) FromMaybeZeroHex(src string) (err error) {
-	err = loadExactHex(key[:], src)
-	if key.IsZero() {
-		return
-	}
-	key.clamp()
-	return
-}
-
-func (key *NoisePublicKey) FromHex(src string) error {
-	return loadExactHex(key[:], src)
-}
-
-func (key NoisePublicKey) IsZero() bool {
-	var zero NoisePublicKey
-	return key.Equals(zero)
-}
-
-func (key NoisePublicKey) Equals(tar NoisePublicKey) bool {
-	return subtle.ConstantTimeCompare(key[:], tar[:]) == 1
-}
-
-func (key *NoisePresharedKey) FromHex(src string) error {
-	return loadExactHex(key[:], src)
-}
+// NoiseNonce is a type representing a Noise nonce, which is a 64-bit value padded to 12 bytes.
+type NoiseNonce uint6
