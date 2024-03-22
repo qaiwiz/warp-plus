@@ -5,13 +5,16 @@ import (
 )
 
 // FinalOptions is a global variable that holds the configuration for the scanner.
+// This variable is used throughout the package to configure various components.
 var FinalOptions *ScannerOptions
 
 // DefaultHTTPClientFunc creates an HTTP client with custom dialers and options.
+// It returns a new *http.Client instance with a custom RoundTripper based on the user's preferences.
 func DefaultHTTPClientFunc(rawDialer TDialerFunc, tlsDialer TDialerFunc, quicDialer TQuicDialerFunc, targetAddr ...string) *http.Client {
 	// ... (code)
 
 	// Create a new http.RoundTripper based on the user's preferences.
+	// If HTTP/3 is enabled, create a new http3.RoundTripper, otherwise create a new http.Transport.
 	var transport http.RoundTripper
 	if FinalOptions.UseHTTP3 {
 		// Create a new http3.RoundTripper if HTTP/3 is enabled.
@@ -37,6 +40,7 @@ func DefaultHTTPClientFunc(rawDialer TDialerFunc, tlsDialer TDialerFunc, quicDia
 }
 
 // DefaultDialerFunc creates a new dialer with a custom connection timeout.
+// It returns a new Dialer instance with the custom connection timeout.
 func DefaultDialerFunc(ctx context.Context, network, addr string) (net.Conn, error) {
 	// ... (code)
 
@@ -49,11 +53,13 @@ func DefaultDialerFunc(ctx context.Context, network, addr string) (net.Conn, err
 }
 
 // getServerName extracts the server name from the given address.
+// It returns the server name and any error encountered during extraction.
 func getServerName(address string) (string, error) {
 	// ... (code)
 }
 
 // defaultTLSConfig creates a new TLS config based on the user's preferences.
+// It returns a new *tls.Config instance with the user's preferences.
 func defaultTLSConfig(addr string) *tls.Config {
 	// ... (code)
 
@@ -68,6 +74,7 @@ func defaultTLSConfig(addr string) *tls.Config {
 }
 
 // DefaultTLSDialerFunc creates a new TLS dialer with a custom handshake timeout.
+// It returns a new net.Conn instance with the custom TLS config and handshake timeout.
 func DefaultTLSDialerFunc(ctx context.Context, network, addr string) (net.Conn, error) {
 	// ... (code)
 
@@ -97,6 +104,7 @@ func DefaultTLSDialerFunc(ctx context.Context, network, addr string) (net.Conn, 
 }
 
 // DefaultQuicDialerFunc creates a new QUIC dialer with custom timeout options.
+// It returns a new quic.EarlyConnection instance with the custom QUIC config and timeout options.
 func DefaultQuicDialerFunc(ctx context.Context, addr string, _ *tls.Config, _ *quic.Config) (quic.EarlyConnection, error) {
 	// ... (code)
 
@@ -111,6 +119,7 @@ func DefaultQuicDialerFunc(ctx context.Context, addr string, _ *tls.Config, _ *q
 }
 
 // DefaultCFRanges returns the default Cloudflare IP ranges.
+// It returns a slice of netip.Prefix instances representing the default Cloudflare IP ranges.
 func DefaultCFRanges() []netip.Prefix {
 	// ... (code)
 
@@ -119,3 +128,4 @@ func DefaultCFRanges() []netip.Prefix {
 		// ... (IP ranges)
 	}
 }
+
