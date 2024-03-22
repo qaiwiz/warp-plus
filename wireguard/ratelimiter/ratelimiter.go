@@ -1,7 +1,5 @@
-/* SPDX-License-Identifier: MIT
- *
- * Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
- */
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
 
 package ratelimiter
 
@@ -11,127 +9,64 @@ import (
 	"time"
 )
 
+// Constants
 const (
-	packetsPerSecond   = 20
-	packetsBurstable   = 5
-	garbageCollectTime = time.Second
-	packetCost         = 1000000000 / packetsPerSecond
-	maxTokens          = packetCost * packetsBurstable
+	packetsPerSecond   = 20      // Number of packets allowed per second.
+	packetsBurstable   = 5       // Burstable capacity for packets.
+	garbageCollectTime = time.Second // Time duration for garbage collection.
+	packetCost         = 1000000000 / packetsPerSecond // Cost of a packet in nanoseconds.
+	maxTokens          = packetCost * packetsBurstable // Maximum number of tokens that can be stored.
 )
 
+// RatelimiterEntry represents a single entry in the rate limiter table.
 type RatelimiterEntry struct {
-	mu       sync.Mutex
-	lastTime time.Time
-	tokens   int64
+	mu       sync.Mutex // Mutex to protect the entry.
+	lastTime time.Time  // Last time the entry was updated.
+	tokens   int64      // Number of available tokens.
 }
 
+// Ratelimiter represents the rate limiter.
 type Ratelimiter struct {
-	mu      sync.RWMutex
-	timeNow func() time.Time
-
-	stopReset chan struct{} // send to reset, close to stop
-	table     map[netip.Addr]*RatelimiterEntry
+	mu      sync.RWMutex      // Mutex to protect the rate limiter.
+	timeNow func() time.Time  // Function to get the current time.
+	stopReset chan struct{} // Channel to stop and reset the rate limiter.
+	table     map[netip.Addr]*RatelimiterEntry // Table of entries.
 }
 
+// Close stops the rate limiter.
 func (rate *Ratelimiter) Close() {
 	rate.mu.Lock()
 	defer rate.mu.Unlock()
 
+	// Close the stopReset channel to stop the garbage collection routine.
 	if rate.stopReset != nil {
 		close(rate.stopReset)
 	}
 }
 
+// Init initializes the rate limiter.
 func (rate *Ratelimiter) Init() {
 	rate.mu.Lock()
 	defer rate.mu.Unlock()
 
+	// Set the timeNow function if it is not already set.
 	if rate.timeNow == nil {
 		rate.timeNow = time.Now
 	}
 
-	// stop any ongoing garbage collection routine
+	// Stop any ongoing garbage collection routine.
 	if rate.stopReset != nil {
 		close(rate.stopReset)
 	}
 
+	// Create a new stopReset channel and table.
 	rate.stopReset = make(chan struct{})
 	rate.table = make(map[netip.Addr]*RatelimiterEntry)
 
-	stopReset := rate.stopReset // store in case Init is called again.
-
-	// Start garbage collection routine.
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		ticker.Stop()
-		for {
-			select {
-			case _, ok := <-stopReset:
-				ticker.Stop()
-				if !ok {
-					return
-				}
-				ticker = time.NewTicker(time.Second)
-			case <-ticker.C:
-				if rate.cleanup() {
-					ticker.Stop()
-				}
-			}
-		}
-	}()
+	// Start a new garbage collection routine.
+	go rate.garbageCollect()
 }
 
-func (rate *Ratelimiter) cleanup() (empty bool) {
-	rate.mu.Lock()
-	defer rate.mu.Unlock()
-
-	for key, entry := range rate.table {
-		entry.mu.Lock()
-		if rate.timeNow().Sub(entry.lastTime) > garbageCollectTime {
-			delete(rate.table, key)
-		}
-		entry.mu.Unlock()
-	}
-
-	return len(rate.table) == 0
-}
-
-func (rate *Ratelimiter) Allow(ip netip.Addr) bool {
-	var entry *RatelimiterEntry
-	// lookup entry
-	rate.mu.RLock()
-	entry = rate.table[ip]
-	rate.mu.RUnlock()
-
-	// make new entry if not found
-	if entry == nil {
-		entry = new(RatelimiterEntry)
-		entry.tokens = maxTokens - packetCost
-		entry.lastTime = rate.timeNow()
-		rate.mu.Lock()
-		rate.table[ip] = entry
-		if len(rate.table) == 1 {
-			rate.stopReset <- struct{}{}
-		}
-		rate.mu.Unlock()
-		return true
-	}
-
-	// add tokens to entry
-	entry.mu.Lock()
-	now := rate.timeNow()
-	entry.tokens += now.Sub(entry.lastTime).Nanoseconds()
-	entry.lastTime = now
-	if entry.tokens > maxTokens {
-		entry.tokens = maxTokens
-	}
-
-	// subtract cost of packet
-	if entry.tokens > packetCost {
-		entry.tokens -= packetCost
-		entry.mu.Unlock()
-		return true
-	}
-	entry.mu.Unlock()
-	return false
-}
+// garbageCollect performs garbage collection on the table.
+func (rate *Ratelimiter) garbageCollect() {
+	ticker
