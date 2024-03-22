@@ -12,25 +12,27 @@ import (
 	"github.com/bepass-org/warp-plus/proxy/pkg/statute"
 )
 
+// userHandler is a type for user-defined request handler function
 type userHandler func(request *statute.ProxyRequest) error
 
+// Proxy represents a proxy server with SOCKS4, SOCKS5, and HTTP support
 type Proxy struct {
 	// bind is the address to listen on
 	bind string
 
-	listener net.Listener
+	listener net.Listener // The listener for incoming connections
 
-	// socks5Proxy is a socks5 server with tcp and udp support
+	// socks5Proxy is a SOCKS5 server with TCP and UDP support
 	socks5Proxy *socks5.Server
-	// socks4Proxy is a socks4 server with tcp support
+	// socks4Proxy is a SOCKS4 server with TCP support
 	socks4Proxy *socks4.Server
-	// httpProxy is a http proxy server with http and http-connect support
+	// httpProxy is an HTTP proxy server with HTTP and HTTP-CONNECT support
 	httpProxy *http.Server
-	// userConnectHandle is a user handler for tcp and udp requests(its general handler)
+	// userConnectHandle is a user handler for TCP and UDP requests (its general handler)
 	userHandler userHandler
-	// if user doesnt set userHandler, it can specify userTCPHandler for manual handling of tcp requests
+	// if user doesn't set userHandler, it can specify userTCPHandler for manual handling of TCP requests
 	userTCPHandler userHandler
-	// if user doesnt set userHandler, it can specify userUDPHandler for manual handling of udp requests
+	// if user doesn't set userHandler, it can specify userUDPHandler for manual handling of UDP requests
 	userUDPHandler userHandler
 	// overwrite dial functions of http, socks4, socks5
 	userDialFunc statute.ProxyDialFunc
@@ -40,6 +42,7 @@ type Proxy struct {
 	ctx context.Context
 }
 
+// NewProxy creates a new Proxy instance with default settings and applies given options
 func NewProxy(options ...Option) *Proxy {
 	p := &Proxy{
 		bind:         statute.DefaultBindAddress,
@@ -58,6 +61,7 @@ func NewProxy(options ...Option) *Proxy {
 	return p
 }
 
+// Option is a functional option for configuring a Proxy instance
 type Option func(*Proxy)
 
 // SwitchConn wraps a net.Conn and a bufio.Reader
@@ -79,6 +83,7 @@ func (c *SwitchConn) Read(p []byte) (n int, err error) {
 	return c.reader.Read(p)
 }
 
+// ListenAndServe starts the proxy server and listens for incoming connections
 func (p *Proxy) ListenAndServe() error {
 	// Create a new listener
 	if p.listener == nil {
@@ -125,6 +130,7 @@ func (p *Proxy) ListenAndServe() error {
 	}
 }
 
+// handleConnection handles an incoming connection based on the proxy protocol
 func (p *Proxy) handleConnection(conn net.Conn) error {
 	// Create a SwitchConn
 	switchConn := NewSwitchConn(conn)
@@ -144,12 +150,11 @@ func (p *Proxy) handleConnection(conn net.Conn) error {
 
 	switch {
 	case buf[0] == 5:
+		// SOCKS5 protocol
 		err = p.socks5Proxy.ServeConn(switchConn)
 	case buf[0] == 4:
+		// SOCKS4 protocol
 		err = p.socks4Proxy.ServeConn(switchConn)
 	default:
-		err = p.httpProxy.ServeConn(switchConn)
-	}
-
-	return err
-}
+		// HTTP protocol
+		err = p.httpProxy
