@@ -12,11 +12,12 @@ import (
 	"github.com/bepass-org/warp-plus/proxy/pkg/statute"
 )
 
+// Server struct represents an HTTP proxy server with customizable options.
 type Server struct {
 	// bind is the address to listen on
 	Bind string
 
-	Listener net.Listener
+	Listener net.Listener // The listener for incoming connections
 
 	// ProxyDial specifies the optional proxyDial function for
 	// establishing the transport connection.
@@ -31,6 +32,7 @@ type Server struct {
 	BytesPool statute.BytesPool
 }
 
+// NewServer creates a new Server instance with default options.
 func NewServer(options ...ServerOption) *Server {
 	s := &Server{
 		Bind:      statute.DefaultBindAddress,
@@ -39,6 +41,7 @@ func NewServer(options ...ServerOption) *Server {
 		Context:   statute.DefaultContext(),
 	}
 
+	// Apply the provided options to the Server instance
 	for _, option := range options {
 		option(s)
 	}
@@ -46,10 +49,12 @@ func NewServer(options ...ServerOption) *Server {
 	return s
 }
 
+// ServerOption is a functional option for configuring the Server.
 type ServerOption func(*Server)
 
+// ListenAndServe starts the HTTP proxy server and handles incoming connections.
 func (s *Server) ListenAndServe() error {
-	// Create a new listener
+	// Create a new listener if not provided
 	if s.Listener == nil {
 		ln, err := net.Listen("tcp", s.Bind)
 		if err != nil {
@@ -58,10 +63,10 @@ func (s *Server) ListenAndServe() error {
 		s.Listener = ln
 	}
 
-	s.Bind = s.Listener.Addr().(*net.TCPAddr).String()
+	// Log the listening address
 	s.Logger.Debug("started proxy", "address", s.Bind)
 
-	// ensure listener will be closed
+	// Ensure the listener will be closed
 	defer func() {
 		_ = s.Listener.Close()
 	}()
@@ -70,7 +75,7 @@ func (s *Server) ListenAndServe() error {
 	ctx, cancel := context.WithCancel(s.Context)
 	defer cancel() // Ensure resources are cleaned up
 
-	// Start to accept connections and serve them
+	// Accept and serve connections concurrently
 	for {
 		select {
 		case <-ctx.Done():
@@ -82,8 +87,7 @@ func (s *Server) ListenAndServe() error {
 				continue
 			}
 
-			// Start a new goroutine to handle each connection
-			// This way, the server can handle multiple connections concurrently
+			// Handle each connection in a new goroutine
 			go func() {
 				err := s.ServeConn(conn)
 				if err != nil {
@@ -94,42 +98,49 @@ func (s *Server) ListenAndServe() error {
 	}
 }
 
+// WithLogger sets the Logger for the Server.
 func WithLogger(logger *slog.Logger) ServerOption {
 	return func(s *Server) {
 		s.Logger = logger
 	}
 }
 
+// WithBind sets the bind address for the Server.
 func WithBind(bindAddress string) ServerOption {
 	return func(s *Server) {
 		s.Bind = bindAddress
 	}
 }
 
+// WithConnectHandle sets the UserConnectHandle for the Server.
 func WithConnectHandle(handler statute.UserConnectHandler) ServerOption {
 	return func(s *Server) {
 		s.UserConnectHandle = handler
 	}
 }
 
+// WithProxyDial sets the ProxyDial for the Server.
 func WithProxyDial(proxyDial statute.ProxyDialFunc) ServerOption {
 	return func(s *Server) {
 		s.ProxyDial = proxyDial
 	}
 }
 
+// WithContext sets the Context for the Server.
 func WithContext(ctx context.Context) ServerOption {
 	return func(s *Server) {
 		s.Context = ctx
 	}
 }
 
+// WithBytesPool sets the BytesPool for the Server.
 func WithBytesPool(bytesPool statute.BytesPool) ServerOption {
 	return func(s *Server) {
 		s.BytesPool = bytesPool
 	}
 }
 
+// ServeConn handles an individual connection.
 func (s *Server) ServeConn(conn net.Conn) error {
 	reader := bufio.NewReader(conn)
 	req, err := http.ReadRequest(reader)
@@ -140,17 +151,21 @@ func (s *Server) ServeConn(conn net.Conn) error {
 	return s.handleHTTP(conn, req, req.Method == http.MethodConnect)
 }
 
+// handleHTTP handles HTTP requests and CONNECT requests differently.
 func (s *Server) handleHTTP(conn net.Conn, req *http.Request, isConnectMethod bool) error {
+	// If UserConnectHandle is not provided, use the default handling
 	if s.UserConnectHandle == nil {
 		return s.embedHandleHTTP(conn, req, isConnectMethod)
 	}
 
+	// Handle CONNECT requests
 	if isConnectMethod {
 		_, err := conn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
 		if err != nil {
 			return err
 		}
 	} else {
+		// Handle non-CONNECT requests
 		cConn := &customConn{
 			Conn: conn,
 			req:  req,
@@ -158,89 +173,9 @@ func (s *Server) handleHTTP(conn net.Conn, req *http.Request, isConnectMethod bo
 		conn = cConn
 	}
 
+	// Parse the target address
 	targetAddr := req.URL.Host
 	host, portStr, err := net.SplitHostPort(targetAddr)
 	if err != nil {
 		host = targetAddr
 		if req.URL.Scheme == "https" || isConnectMethod {
-			portStr = "443"
-		} else {
-			portStr = "80"
-		}
-		targetAddr = net.JoinHostPort(host, portStr)
-	}
-
-	portInt, err := strconv.Atoi(portStr)
-	if err != nil {
-		return err // Handle the error if the port string is not a valid integer.
-	}
-	port := int32(portInt)
-
-	proxyReq := &statute.ProxyRequest{
-		Conn:        conn,
-		Reader:      io.Reader(conn),
-		Writer:      io.Writer(conn),
-		Network:     "tcp",
-		Destination: targetAddr,
-		DestHost:    host,
-		DestPort:    port,
-	}
-
-	return s.UserConnectHandle(proxyReq)
-}
-
-func (s *Server) embedHandleHTTP(conn net.Conn, req *http.Request, isConnectMethod bool) error {
-	defer func() {
-		_ = conn.Close()
-	}()
-
-	host, portStr, err := net.SplitHostPort(req.URL.Host)
-	if err != nil {
-		host = req.URL.Host
-		if req.URL.Scheme == "https" || isConnectMethod {
-			portStr = "443"
-		} else {
-			portStr = "80"
-		}
-	}
-	targetAddr := net.JoinHostPort(host, portStr)
-
-	target, err := s.ProxyDial(s.Context, "tcp", targetAddr)
-	if err != nil {
-		http.Error(
-			NewHTTPResponseWriter(conn),
-			err.Error(),
-			http.StatusServiceUnavailable,
-		)
-		return err
-	}
-	defer func() {
-		_ = target.Close()
-	}()
-
-	if isConnectMethod {
-		_, err = conn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
-		if err != nil {
-			return err
-		}
-	} else {
-		err = req.Write(target)
-		if err != nil {
-			return err
-		}
-	}
-
-	var buf1, buf2 []byte
-	if s.BytesPool != nil {
-		buf1 = s.BytesPool.Get()
-		buf2 = s.BytesPool.Get()
-		defer func() {
-			s.BytesPool.Put(buf1)
-			s.BytesPool.Put(buf2)
-		}()
-	} else {
-		buf1 = make([]byte, 32*1024)
-		buf2 = make([]byte, 32*1024)
-	}
-	return statute.Tunnel(s.Context, target, conn, buf1, buf2)
-}
