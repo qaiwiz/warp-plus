@@ -15,17 +15,21 @@ import (
 	"github.com/rodaine/table"
 )
 
+// privKey and pubKey are the private and public keys for Warp.
 var (
 	privKey           = "yGXeX7gMyUIZmK5QIgC7+XX5USUSskQvBYiQ6LdkiXI="
 	pubKey            = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
 	googlev6DNSAddr80 = netip.MustParseAddrPort("[2001:4860:4860::8888]:80")
 )
 
+// canConnectIPv6 checks if a remote IPv6 address is reachable.
 func canConnectIPv6(remoteAddr netip.AddrPort) bool {
+	// Create a dialer with a timeout of 5 seconds.
 	dialer := net.Dialer{
 		Timeout: 5 * time.Second,
 	}
 
+	// Dial the remote address and return true if successful.
 	conn, err := dialer.Dial("tcp6", remoteAddr.String())
 	if err != nil {
 		return false
@@ -35,8 +39,9 @@ func canConnectIPv6(remoteAddr netip.AddrPort) bool {
 	return true
 }
 
+// RunScan scans for available IP addresses using Warp.
 func RunScan(privKey, pubKey string) (result []statute.IPInfo) {
-	// new scanner
+	// Create a new scanner with various configurations.
 	scanner := ipscanner.NewScanner(
 		ipscanner.WithLogger(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))),
 		ipscanner.WithWarpPing(),
@@ -48,46 +53,20 @@ func RunScan(privKey, pubKey string) (result []statute.IPInfo) {
 		ipscanner.WithCidrList(warp.WarpPrefixes()),
 	)
 
+	// Create a context with a timeout of 2 minutes.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
+	// Start the scanner and wait for the results.
 	scanner.Run(ctx)
 
+	// Set up a ticker to check for results every second.
 	t := time.NewTicker(1 * time.Second)
 	defer t.Stop()
 
+	// Continuously check for results until the context is done.
 	for {
 		ipList := scanner.GetAvailableIPs()
 		if len(ipList) > 1 {
-			for i := 0; i < 2; i++ {
-				result = append(result, ipList[i])
-			}
-			return
-		}
-
-		select {
-		case <-ctx.Done():
-			// Context is done
-			return
-		case <-t.C:
-			// Prevent the loop from spinning too fast
-			continue
-		}
-	}
-}
-
-func main() {
-	result := RunScan(privKey, pubKey)
-
-	headerFmt := color.New(color.FgGreen, color.Underline).SprintfFunc()
-	columnFmt := color.New(color.FgYellow).SprintfFunc()
-
-	tbl := table.New("Address", "RTT (ping)", "Time")
-	tbl.WithHeaderFormatter(headerFmt).WithFirstColumnFormatter(columnFmt)
-
-	for _, info := range result {
-		tbl.AddRow(info.AddrPort, info.RTT, info.CreatedAt)
-	}
-
-	tbl.Print()
-}
+			// Return the first two results.
+			
