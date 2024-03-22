@@ -7,4 +7,7 @@
 
 package conn
 
+// NewDefaultBind creates a new default bind object.
+// It returns an instance of Bind, specifically a StdNetBind.
+// This function is only available on non-Windows systems.
 func NewDefaultBind() Bind { return NewStdNetBind() }
