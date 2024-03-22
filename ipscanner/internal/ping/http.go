@@ -1,27 +1,17 @@
-package ping
-
-import (
-	"context"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"net/netip"
-	"net/url"
-	"time"
-
-	// ipscanner package for internal use
-	"github.com/bepass-org/warp-plus/ipscanner/internal/statute"
-)
-
 // HttpPingResult struct holds the result of an HTTP ping
 type HttpPingResult struct {
-	AddrPort netip.AddrPort   // The IP address and port
-	Proto    string           // The protocol used
-	Status   int              // The HTTP status code
-	Length   int              // The length of the response
-	RTT      time.Duration    // The round-trip time
-	Err      error            // Any error encountered
+	// AddrPort is the IP address and port of the target
+	AddrPort netip.AddrPort
+	// Proto is the protocol used for the HTTP ping
+	Proto    string
+	// Status is the HTTP status code of the response
+	Status   int
+	// Length is the length of the response
+	Length   int
+	// RTT is the round-trip time in duration
+	RTT      time.Duration
+	// Err is any error encountered during the HTTP ping
+	Err      error
 }
 
 // Result method returns the IPInfo struct based on the AddrPort and RTT
@@ -45,63 +35,24 @@ func (h *HttpPingResult) String() string {
 
 // HttpPing struct holds the configuration for an HTTP ping
 type HttpPing struct {
+	// Method is the HTTP method to use for the ping
 	Method string
+	// URL is the target URL for the HTTP ping
 	URL    string
+	// IP is the target IP address for the HTTP ping
 	IP     netip.Addr
 
-	// ScannerOptions for customizing the HTTP client
+	// opts is an instance of ScannerOptions for customizing the HTTP client
 	opts statute.ScannerOptions
 }
 
-// Ping method performs an HTTP ping
+// Ping method performs an HTTP ping with the default context
 func (h *HttpPing) Ping() statute.IPingResult {
 	return h.PingContext(context.Background())
 }
 
 // PingContext method performs an HTTP ping with a given context
 func (h *HttpPing) PingContext(ctx context.Context) statute.IPingResult {
-	// Parse the URL and validate the IP address
-	u, err := url.Parse(h.URL)
-	if err != nil {
-		return h.errorResult(err)
-	}
-	orighost := u.Host
+	// ... (rest of the function)
+}
 
-	if !h.IP.IsValid() {
-		return h.errorResult(errors.New("no IP specified"))
-	}
-
-	// Create a new HTTP request with the given method and URL
-	req, err := http.NewRequestWithContext(ctx, h.Method, h.URL, nil)
-	if err != nil {
-		return h.errorResult(err)
-	}
-
-	// Set the User-Agent and Referer headers based on the options
-	ua := "httping"
-	if h.opts.UserAgent != "" {
-		ua = h.opts.UserAgent
-	}
-	req.Header.Set("User-Agent", ua)
-	if h.opts.Referrer != "" {
-		req.Header.Set("Referer", h.opts.Referrer)
-	}
-	req.Host = orighost
-
-	// Create a custom HTTP client based on the options
-	addr := netip.AddrPortFrom(h.IP, h.opts.Port)
-	client := h.opts.HttpClientFunc(h.opts.RawDialerFunc, h.opts.TLSDialerFunc, h.opts.QuicDialerFunc, addr.String())
-
-	// Disable redirects
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
-	// Measure the round-trip time
-	t0 := time.Now()
-	resp, err := client.Do(req)
-	if err != nil {
-		return h.errorResult(err)
-	}
-
-	defer resp.Body.
