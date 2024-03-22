@@ -8,18 +8,19 @@ import (
 	"strconv"
 )
 
+// Main function is the entry point of the program
 func main() {
-	proxyAddr := "127.0.0.1:1080"
-	targetAddr := "<YOUR Netcat ip address>:4444"
+	proxyAddr := "127.0.0.1:1080" // SOCKS5 proxy address
+	targetAddr := "<YOUR Netcat ip address>:4444" // Target address to connect
 
-	// Connect to SOCKS5 proxy
+	// Connect to the SOCKS5 proxy
 	conn, err := net.Dial("tcp", proxyAddr)
 	if err != nil {
-		panic(err)
+		panic(err) // Panic if there's an error during connection
 	}
-	defer conn.Close()
+	defer conn.Close() // Close the connection when the function ends
 
-	// Send greeting to SOCKS5 proxy
+	// Send greeting to the SOCKS5 proxy
 	conn.Write([]byte{0x05, 0x01, 0x00})
 
 	// Read greeting response
@@ -34,8 +35,8 @@ func main() {
 	io.ReadFull(conn, response)
 
 	// Extract the bind address and port
-	bindIP := net.IP(response[4:8])
-	bindPort := binary.BigEndian.Uint16(response[8:10])
+	bindIP := net.IP(response[4:8]) // IP address
+	bindPort := binary.BigEndian.Uint16(response[8:10]) // Port number
 
 	// Print the bind address
 	fmt.Printf("Bind address: %s:%d\n", bindIP, bindPort)
@@ -43,27 +44,15 @@ func main() {
 	// Create UDP connection
 	udpConn, err := net.Dial("udp", fmt.Sprintf("%s:%d", bindIP, bindPort))
 	if err != nil {
-		panic(err)
+		panic(err) // Panic if there's an error during connection
 	}
-	defer udpConn.Close()
+	defer udpConn.Close() // Close the connection when the function ends
 
 	// Extract target IP and port
-	dstIP, dstPortStr, _ := net.SplitHostPort(targetAddr)
-	dstPort, _ := strconv.Atoi(dstPortStr)
+	dstIP, dstPortStr, _ := net.SplitHostPort(targetAddr) // Split the target address into IP and port
+	dstPort, _ := strconv.Atoi(dstPortStr) // Convert the port string to an integer
 
 	// Construct the UDP packet with the target address and message
 	packet := make([]byte, 0)
 	packet = append(packet, 0x00, 0x00, 0x00) // RSV and FRAG
-	packet = append(packet, 0x01)             // ATYP for IPv4
-	packet = append(packet, net.ParseIP(dstIP).To4()...)
-	packet = append(packet, byte(dstPort>>8), byte(dstPort&0xFF))
-	packet = append(packet, []byte("Hello, UDP through SOCKS5!")...)
-
-	// Send the UDP packet
-	udpConn.Write(packet)
-
-	// Read the response
-	buffer := make([]byte, 1024)
-	n, _ := udpConn.Read(buffer)
-	fmt.Println("Received:", string(buffer[10:n]))
-}
+	packet = append(packet, 0
