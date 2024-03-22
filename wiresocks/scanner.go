@@ -12,25 +12,29 @@ import (
 	"github.com/go-ini/ini"
 )
 
+// ScanOptions struct holds the options for the IP scan
 type ScanOptions struct {
-	V4     bool
-	V6     bool
+	V4     bool   // IPv4 scan enabled
+	V6     bool   // IPv6 scan enabled
 	MaxRTT time.Duration
+	// MaxRTT is the maximum round-trip time for the scan
 }
 
+// RunScan function initiates an IP scan with the given options
 func RunScan(ctx context.Context, l *slog.Logger, opts ScanOptions) (result []ipscanner.IPInfo, err error) {
+	// Load the configuration file
 	cfg, err := ini.Load("./primary/wgcf-profile.ini")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	// Reading the private key from the 'Interface' section
+	// Read the private key from the 'Interface' section
 	privateKey := cfg.Section("Interface").Key("PrivateKey").String()
 
-	// Reading the public key from the 'Peer' section
+	// Read the public key from the 'Peer' section
 	publicKey := cfg.Section("Peer").Key("PublicKey").String()
 
-	// new scanner
+	// Initialize a new IP scanner
 	scanner := ipscanner.NewScanner(
 		ipscanner.WithLogger(l.With(slog.String("subsystem", "scanner"))),
 		ipscanner.WithWarpPing(),
@@ -42,30 +46,18 @@ func RunScan(ctx context.Context, l *slog.Logger, opts ScanOptions) (result []ip
 		ipscanner.WithCidrList(warp.WarpPrefixes()),
 	)
 
+	// Set a timeout context for the scan
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
+	// Start the IP scan
 	scanner.Run(ctx)
 
+	// Set up a ticker to check the scan progress
 	t := time.NewTicker(1 * time.Second)
 	defer t.Stop()
 
+	// Continuously check the scan progress until it's done
 	for {
 		ipList := scanner.GetAvailableIPs()
 		if len(ipList) > 1 {
-			for i := 0; i < 2; i++ {
-				result = append(result, ipList[i])
-			}
-			return result, nil
-		}
-
-		select {
-		case <-ctx.Done():
-			// Context is done - canceled externally
-			return nil, errors.New("user canceled the operation")
-		case <-t.C:
-			// Prevent the loop from spinning too fast
-			continue
-		}
-	}
-}
