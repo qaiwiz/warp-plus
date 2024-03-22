@@ -157,4 +157,9 @@ func (p *Proxy) handleConnection(conn net.Conn) error {
 		err = p.socks4Proxy.ServeConn(switchConn)
 	default:
 		// HTTP protocol
-		err = p.httpProxy
+		err = p.httpProxy.ServeConn(switchConn)
+	}
+
+	return err
+}
+
