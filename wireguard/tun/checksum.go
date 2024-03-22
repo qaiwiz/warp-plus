@@ -2,11 +2,14 @@ package tun
 
 import "encoding/binary"
 
-// TODO: Explore SIMD and/or other assembly optimizations.
-// TODO: Test native endian loads. See RFC 1071 section 2 part B.
+// checksumNoFold calculates the IP checksum of a given byte slice without folding.
+// It takes the byte slice 'b' and an initial 64-bit accumulator value 'initial' as input.
+// The function processes the byte slice in chunks of 32-bit unsigned integers in big-endian byte order.
+// It returns the calculated 64-bit checksum value.
 func checksumNoFold(b []byte, initial uint64) uint64 {
 	ac := initial
 
+	// Process the byte slice in chunks of 128 bytes.
 	for len(b) >= 128 {
 		ac += uint64(binary.BigEndian.Uint32(b[:4]))
 		ac += uint64(binary.BigEndian.Uint32(b[4:8]))
@@ -42,6 +45,8 @@ func checksumNoFold(b []byte, initial uint64) uint64 {
 		ac += uint64(binary.BigEndian.Uint32(b[124:128]))
 		b = b[128:]
 	}
+
+	// Process the remaining bytes in smaller chunks.
 	if len(b) >= 64 {
 		ac += uint64(binary.BigEndian.Uint32(b[:4]))
 		ac += uint64(binary.BigEndian.Uint32(b[4:8]))
@@ -58,61 +63,4 @@ func checksumNoFold(b []byte, initial uint64) uint64 {
 		ac += uint64(binary.BigEndian.Uint32(b[48:52]))
 		ac += uint64(binary.BigEndian.Uint32(b[52:56]))
 		ac += uint64(binary.BigEndian.Uint32(b[56:60]))
-		ac += uint64(binary.BigEndian.Uint32(b[60:64]))
-		b = b[64:]
-	}
-	if len(b) >= 32 {
-		ac += uint64(binary.BigEndian.Uint32(b[:4]))
-		ac += uint64(binary.BigEndian.Uint32(b[4:8]))
-		ac += uint64(binary.BigEndian.Uint32(b[8:12]))
-		ac += uint64(binary.BigEndian.Uint32(b[12:16]))
-		ac += uint64(binary.BigEndian.Uint32(b[16:20]))
-		ac += uint64(binary.BigEndian.Uint32(b[20:24]))
-		ac += uint64(binary.BigEndian.Uint32(b[24:28]))
-		ac += uint64(binary.BigEndian.Uint32(b[28:32]))
-		b = b[32:]
-	}
-	if len(b) >= 16 {
-		ac += uint64(binary.BigEndian.Uint32(b[:4]))
-		ac += uint64(binary.BigEndian.Uint32(b[4:8]))
-		ac += uint64(binary.BigEndian.Uint32(b[8:12]))
-		ac += uint64(binary.BigEndian.Uint32(b[12:16]))
-		b = b[16:]
-	}
-	if len(b) >= 8 {
-		ac += uint64(binary.BigEndian.Uint32(b[:4]))
-		ac += uint64(binary.BigEndian.Uint32(b[4:8]))
-		b = b[8:]
-	}
-	if len(b) >= 4 {
-		ac += uint64(binary.BigEndian.Uint32(b))
-		b = b[4:]
-	}
-	if len(b) >= 2 {
-		ac += uint64(binary.BigEndian.Uint16(b))
-		b = b[2:]
-	}
-	if len(b) == 1 {
-		ac += uint64(b[0]) << 8
-	}
-
-	return ac
-}
-
-func checksum(b []byte, initial uint64) uint16 {
-	ac := checksumNoFold(b, initial)
-	ac = (ac >> 16) + (ac & 0xffff)
-	ac = (ac >> 16) + (ac & 0xffff)
-	ac = (ac >> 16) + (ac & 0xffff)
-	ac = (ac >> 16) + (ac & 0xffff)
-	return uint16(ac)
-}
-
-func pseudoHeaderChecksumNoFold(protocol uint8, srcAddr, dstAddr []byte, totalLen uint16) uint64 {
-	sum := checksumNoFold(srcAddr, 0)
-	sum = checksumNoFold(dstAddr, sum)
-	sum = checksumNoFold([]byte{0, protocol}, sum)
-	tmp := make([]byte, 2)
-	binary.BigEndian.PutUint16(tmp, totalLen)
-	return checksumNoFold(tmp, sum)
-}
+		ac += uint64(binary.BigEndian.
