@@ -1,25 +1,20 @@
-package http
-
-import (
-	"bytes"
-	"fmt"
-	"net"
-	"net/http"
-	"sync"
-)
-
-// copyBuffer is a helper function to copy data between two net.Conn objects.
-// It is currently commented out, but it can be used with io.CopyBuffer() to
-// provide a custom buffer size.
-
-type responseWriter struct {
-	conn    net.Conn        // The underlying net.Conn object for the response.
-	headers http.Header     // A http.Header object to store and manage response headers.
-	status  int             // The HTTP status code for the response.
-	written bool            // A flag to indicate if the headers and status code have been written.
+// WriteHeader implements the http.ResponseWriter.WriteHeader method.
+// It writes the HTTP status code to the response if it hasn't already been written.
+func (w *responseWriter) WriteHeader(status int) {
+    if !w.written {
+        w.status = status
+        w.written = true
+        return
+    }
+    // If the headers have already been written, WriteHeader will panic.
+    // However, we can still set the status code using http.Flush() if it hasn't been set yet.
+    if w.status == 0 {
+        w.status = status
+    } else if status != w.status {
+        http.Error(w, "header already written", http.StatusInternalServerError)
+    }
 }
 
-// NewHTTPResponseWriter creates a new custom http.ResponseWriter that wraps a net.Conn.
-func NewHTTPResponseWriter(conn net.Conn) http.ResponseWriter {
-	return &responseWriter{
-	
+// Write implements the http.ResponseWriter.Write method.
+// It writes the data to the underlying net.Conn object.
+func (w *responseWriter) Write(data []byte) (int, error)
